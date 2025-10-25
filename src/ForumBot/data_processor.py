@@ -24,7 +24,7 @@ def fetch_topic_details(topic_id, config=None):
         dict or None: 如果请求成功，返回包含详细内容的字典；否则返回 None。
     """
     if config is None:
-        from .utils import load_config
+        from src.utils import load_config
         config = load_config()
 
         # 从配置中获取论坛基础URL
@@ -46,7 +46,7 @@ def fetch_topic_details(topic_id, config=None):
 def fetch_all_forum_topics(sort="newest", config=None):
     # 如果没有传入配置，则加载默认配置
     if config is None:
-        from .utils import load_config
+        from src.utils import load_config
         config = load_config()
 
     base_url = config.get('forum', {}).get('base_url', 'https://openubmc-discussion.test.osinfra.cn') + "/latest.json"
@@ -117,16 +117,7 @@ def fetch_all_forum_topics(sort="newest", config=None):
             break
 
     return all_topics
-    # 获取每个帖子的详细内容
-    # all_topic_details = []
-    # for topic in all_topics:
-    #     topic_id = topic.get('id')
-    #     if topic_id:
-    #         details = fetch_topic_details(topic_id)
-    #         if details:
-    #             all_topic_details.append(details)
-    #
-    # return all_topic_details
+
 
 def process_html_content_with_image_links(html_content):
     """
