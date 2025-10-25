@@ -111,10 +111,10 @@ class ForumMonitor:
         if search_results:
             for i, result in enumerate(search_results[:5]):
                 path = result.get('path', '')
-                if path.startswith('/t/topic'):
-                    full_url = "https://discuss.openubmc.cn" + path
+                if path.startswith(self.config['links']['topic_path_prefix']):
+                    full_url = self.config['links']['forum_base_url'] + path
                 else:
-                    full_url = "https://www.openubmc.cn/" + path
+                    full_url = self.config['links']['docs_base_url'] + path
                 links.append(full_url)
         kg_links = []
         if retrieval_docs:
@@ -157,7 +157,7 @@ class ForumMonitor:
 
                     # 处理前5个有效的主题ID
                     for topic_id in valid_topic_ids[:5]:
-                        kg_link = f"https://discuss.openubmc.cn/t/topic/{topic_id}"
+                        kg_link = f"{self.config['links']['forum_base_url']}{self.config['links']['topic_path_prefix']}/{topic_id}"
                         kg_links.append(kg_link)
 
             except Exception as e:
