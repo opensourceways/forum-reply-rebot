@@ -31,18 +31,12 @@ class ForumMonitor:
         """
         csv_file = self.config['paths']['csv_file']
         check_interval = self.config['monitor']['check_interval']
-
         logger.info(f"开始监控新帖子，检查间隔: {check_interval}秒")
-
         while True:
             try:
                 logger.info(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 正在检查新帖子...")
                 self._check_new_topics(csv_file)
-
-
                 time.sleep(check_interval)
-
-
             except KeyboardInterrupt:
                 logger.info("\n监控任务已停止")
                 break
@@ -50,7 +44,7 @@ class ForumMonitor:
                 logger.error(f"监控过程中发生错误: {e}")
                 time.sleep(check_interval)
 
-    # 在 monitor.py 中修改 _check_new_topics 函数
+
     def _check_new_topics(self, csv_file):
         """
         检查并处理新帖子
@@ -58,10 +52,8 @@ class ForumMonitor:
         # 加载已存在的帖子数据
         existing_data = self.data_processor.load_existing_data(csv_file)
         logger.info(f"已存在 {len(existing_data)} 个帖子")
-
         # 获取所有帖子的基本信息
         all_topics = self.forum_client.fetch_all_forum_topics()
-
         if not all_topics:
             logger.warning("无法获取帖子数据。")
             return
@@ -97,7 +89,6 @@ class ForumMonitor:
 
             # 提取数据
             extracted_data = self.data_processor.extract_topic_data(new_topics_details)
-
             # 追加新帖子到CSV文件
             self.data_processor.append_to_csv(extracted_data, csv_file)
             # self.data_processor.append_to_db(new_topics, 'forum_topics')
@@ -115,8 +106,6 @@ class ForumMonitor:
         Returns:
             str: 格式化的相关链接文本
         """
-
-
         links = []
         # 取前5个结果
         if search_results:
@@ -127,7 +116,6 @@ class ForumMonitor:
                 else:
                     full_url = "https://www.openubmc.cn/" + path
                 links.append(full_url)
-
         kg_links = []
         if retrieval_docs:
             try:
@@ -139,8 +127,6 @@ class ForumMonitor:
                     # 提取实体部分的内容
                     entities_content = retrieval_docs[
                                        entities_start + len("-----Entities(KG)-----"):relationships_start].strip()
-
-
 
                     # 使用正则表达式提取可能的JSON对象
                     json_objects = re.findall(r'\{[^{}]*"file_path"[^{}]*\}', entities_content)
@@ -188,25 +174,18 @@ class ForumMonitor:
         else:
             return ""
 
-
-
-
     def _process_new_topics(self, new_topics):
         """
         处理新帖子（生成摘要、搜索相关主题、回复等）
         """
-
         csv_file = self.config['paths']['csv_file']
         processed_csv_file = self.config['paths']['processed_csv_file']  # 获取新CSV文件路径
         answer_csv_file = self.config['paths']['answer_csv_file']
-
         for i, topic in enumerate(new_topics):
             topic_id = topic['id']
             logger.info(f"正在处理帖子 {topic_id} ({i + 1}/{len(new_topics)})")
-
             try:
                 retrieval_results = []
-
                 logger.info(f"正在为帖子 {topic_id} 生成摘要...")
                 summary = self.ai_processor.summarize_text(topic['title'], topic['user_question'],topic_id)
                 topic['summary_question'] = summary
@@ -217,7 +196,6 @@ class ForumMonitor:
                 search_results = self.forum_client.search_related_topics(
                     summary, topic_id
                 )
-
                 # 处理搜索结果
                 if search_results:
                     logger.info(f"帖子 {topic_id} 搜索到 {len(search_results)} 个相关主题")
@@ -294,13 +272,11 @@ class ForumMonitor:
                 #
                 # # 同步到Git仓库
                 # self._sync_csv_to_git_repo(answer_csv_file, topic_id)
-
                 logger.info(f"已完成处理帖子 {topic_id} 并同步到Git仓库")
             except Exception as e:
                 logger.error(f"处理帖子 {topic_id} 时发生错误: {e}")
                 # 即使某个帖子处理失败，也继续处理下一个帖子
                 continue
-
 
     def _sync_csv_to_git_repo(self, csv_file, topic_id=None):
         """
