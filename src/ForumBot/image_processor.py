@@ -19,12 +19,13 @@ class ImageProcessor:
             config['image_processing']['model2'],
         ]
 
-    def extract_image_info_from_text(self, text, base_url="https://discuss.openubmc.cn"):
+    def extract_image_info_from_text(self, text):
         """
         从文本中提取图像信息
         """
         img_pattern = r'\[img: \((.*?)\)\]'
         matches = re.findall(img_pattern, text)
+        base_url = self.config.get('image_processing', {}).get('base_url', 'https://discuss.openubmc.cn')
 
         images = []
         for match in matches:

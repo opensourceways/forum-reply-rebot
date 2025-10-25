@@ -9,6 +9,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app
 
+# 创建普通用户（按照指定方式配置）
+RUN groupadd -g 1000 appuser && \
+    useradd -u 1000 -g appuser -s /sbin/nologin appuser
+
 # 安装系统依赖
 RUN apt-get update && apt-get install -y \
     gcc \
@@ -23,10 +27,14 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY . .
 
 # 创建必要的目录
-RUN mkdir -p data/forum_data logs
+RUN mkdir -p data/forum_data logs && \
+    chown -R appuser:appuser /app
 
-# 暴露端口（如果应用需要）
-# EXPOSE 8000
+# 切换到普通用户
+USER appuser
+
+# 暴露端口（Flask应用需要监听端口提供健康检查服务）
+EXPOSE 5000
 
 # 设置启动命令
 CMD ["python", "main.py"]
