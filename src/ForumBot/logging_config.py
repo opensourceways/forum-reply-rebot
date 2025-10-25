@@ -1,7 +1,7 @@
 import logging
 import os
 from datetime import datetime
-from .utils import load_config
+from src.utils import load_config
 
 def setup_logger(name, log_file=None, level=logging.INFO):
     """

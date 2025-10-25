@@ -13,7 +13,7 @@ from flask import Flask, request, jsonify
 from src.ForumBot.ai_processor import AIProcessor
 from src.ForumBot.forum_client import ForumClient
 from src.ForumBot.data_processor import DataProcessor
-from src.ForumBot.utils import load_config
+from src.utils import load_config
 from src.ForumBot.logging_config import main_logger as logger
 from src.ForumBot.token_tracker import token_tracker
 
