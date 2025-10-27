@@ -27,6 +27,8 @@ class ForumClient:
         回复指定的论坛主题
         """
         logger.info(f"正在回复主题 {topic_id}")
+        # 获取SSL验证设置
+        verify_ssl = self.config.get('posts', {}).get('verify_ssl', True)
         headers = {
             "Content-Type": "application/json",
             "Api-Key": self.config['posts']['api_key'],
@@ -42,7 +44,8 @@ class ForumClient:
             response = requests.post(
                 f"{self.config['posts']['base_url']}/posts.json",
                 headers=headers,
-                data=json.dumps(payload)
+                data=json.dumps(payload),
+                verify=verify_ssl
             )
 
             if response.status_code == 200:
@@ -75,6 +78,8 @@ class ForumClient:
         base_url = self.config['search']['base_url']
         endpoint = self.config['search']['endpoint']
         url = f"{base_url}{endpoint}"
+        # 获取SSL验证设置
+        verify_ssl = self.config.get('search', {}).get('verify_ssl', True)
 
         headers = {
             "source": self.config['search']['source']
@@ -94,7 +99,7 @@ class ForumClient:
         }
 
         try:
-            response = requests.post(url, headers=headers, json=data)
+            response = requests.post(url, headers=headers, json=data, verify=verify_ssl)
 
             if response.status_code == 200:
                 result = response.json()
@@ -149,6 +154,8 @@ class ForumClient:
         base_url = self.config['retrieval']['base_url']
         endpoint = self.config['retrieval']['query_endpoint']
         url = f"{base_url}{endpoint}"
+        # 获取SSL验证设置
+        verify_ssl = self.config.get('retrieval', {}).get('verify_ssl', True)
 
         payload = {
             "query": query,
@@ -159,7 +166,7 @@ class ForumClient:
         }
 
         try:
-            response = requests.post(url, json=payload)
+            response = requests.post(url, json=payload, verify=verify_ssl)
             response.raise_for_status()
             result = response.json()
             return result.get("response")
