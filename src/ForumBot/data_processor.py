@@ -12,6 +12,8 @@ from psycopg2.extras import Json, execute_values
 from .image_processor import ImageProcessor
 import re
 import pandas as pd
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def fetch_topic_details(topic_id, config=None):
     """
@@ -32,8 +34,9 @@ def fetch_topic_details(topic_id, config=None):
     url = f"{base_url}/t/{topic_id}.json"
     # 从配置中获取请求延迟时间
     request_delay = config.get('forum', {}).get('request_delay', 0.1)
+    verify_ssl = config.get('forum', {}).get('verify_ssl', True)
     try:
-        response = requests.get(url)
+        response = requests.get(url, verify=verify_ssl)
         response.raise_for_status()  # 检查响应状态码是否为 2xx
         time.sleep(request_delay)  # 每次请求后暂停0.1秒
         return response.json()  # 返回解析后的 JSON 数据
@@ -55,6 +58,8 @@ def fetch_all_forum_topics(sort="newest", config=None):
 
     # 获取过滤条件
     required_tag = config['monitor']['required_tag']
+    # 获取SSL验证设置
+    verify_ssl = config.get('forum', {}).get('verify_ssl', True)
 
     # 设置过滤日期 (2025年9月1日)
     cutoff_date = datetime.strptime(config['monitor']['topic_cutoff_date'], '%Y-%m-%d')
@@ -67,7 +72,7 @@ def fetch_all_forum_topics(sort="newest", config=None):
         }
 
         try:
-            response = requests.get(base_url, params=params)
+            response = requests.get(base_url, params=params, verify=verify_ssl)
             response.raise_for_status()
             data = response.json()
 
