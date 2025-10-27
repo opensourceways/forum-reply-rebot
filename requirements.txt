@@ -16,6 +16,9 @@ werkzeug>=2.3.0
 # 日期时间处理
 pytz>=2023.3
 
+# 数据库连接
+psycopg2>=2.9.0
+
 # 日志记录
 python-json-logger>=2.0.0
 
