@@ -172,7 +172,7 @@ class UpdateLightRAGTimer:
         # 设置定时任务
         logger.info("启动定时任务")
         schedule_interval = self.config['timer']['schedule_interval']
-        self.job = schedule.every(schedule_interval).day.at('02:00').do(
+        self.job = schedule.every(schedule_interval).day.at('09:20').do(
             self.update_increment_data.update_lightrag_task)
 
         # 运行定时任务循环
