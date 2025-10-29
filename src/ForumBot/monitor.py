@@ -14,6 +14,12 @@ from .token_tracker import token_tracker
 import json
 import re
 
+# 常量定义
+KG_VOTE_THRESHOLD = 5  # 知识图谱链接的票数阈值
+KG_HIGH_VOTE_MIN_COUNT = 4  # 达到票阈值链接的保留数量
+KG_TOP_COUNT_IF_LOW_VOTE = 3  # 如果达到票阈值链接不足时保留的KG链接数量
+MAX_LINKS = 5  # 最大链接数量
+MAX_SEARCH_RESULTS = 5  # 最大搜索结果数量
 
 class ForumMonitor:
     def __init__(self, config_file='config/config.yaml'):
@@ -91,32 +97,35 @@ class ForumMonitor:
             extracted_data = self.data_processor.extract_topic_data(new_topics_details)
             # 追加新帖子到CSV文件
             self.data_processor.append_to_csv(extracted_data, csv_file)
-            # self.data_processor.append_to_db(new_topics, 'forum_topics')
+            self.data_processor.append_to_db(new_topics, 'forum_topics')
             self._process_new_topics(extracted_data)
         else:
             logger.info("没有发现新帖子")
 
     def _generate_related_links(self, search_results, retrieval_docs=None):
         """
-        生成相关链接部分
+               生成相关链接部分
 
-        Args:
-            search_results: 搜索结果列表
+               Args:
+                   search_results: 搜索结果列表
+                   retrieval_docs: 检索结果文档内容
 
-        Returns:
-            str: 格式化的相关链接文本
-        """
-        links = []
-        # 取前5个结果
-        if search_results:
-            for i, result in enumerate(search_results[:5]):
-                path = result.get('path', '')
-                if path.startswith(self.config['links']['topic_path_prefix']):
-                    full_url = self.config['links']['forum_base_url'] + path
-                else:
-                    full_url = self.config['links']['docs_base_url'] + path
-                links.append(full_url)
+               Returns:
+                   str: 格式化的相关链接文本
+               """
+
+        # 从配置中获取基础URL
+        forum_base_url = self.config.get('links', {}).get('forum_base_url', '')
+        docs_base_url = self.config.get('links', {}).get('docs_base_url', '')
+
+        # 存储所有唯一链接
+        all_links = []
+        # 存储已添加的topic_id，用于去重
+        added_topic_ids = set()
+
+        # 处理知识图谱链接
         kg_links = []
+        kg_topic_ids = []
         if retrieval_docs:
             try:
                 # 查找-----Entities(KG)-----和-----Relationships(KG)-----之间的内容
@@ -130,47 +139,151 @@ class ForumMonitor:
 
                     # 使用正则表达式提取可能的JSON对象
                     json_objects = re.findall(r'\{[^{}]*"file_path"[^{}]*\}', entities_content)
+                    # 统计每个topic_id的出现次数
+                    topic_id_votes = {}
 
-                    file_paths = []
                     for json_str in json_objects:
                         try:
                             obj = json.loads(json_str)
                             if 'file_path' in obj:
-                                file_paths.append(obj['file_path'])
+                                file_path_entry = obj['file_path']
+                                # 分割多个文件路径
+                                paths = file_path_entry.split(';')
+                                for path in paths:
+                                    # 提取文件名中的数字
+                                    match = re.search(r'_(\d+)\.json$', path.strip())
+                                    if match:
+                                        topic_id = int(match.group(1))
+                                        # 只统计数字大于10的主题ID
+                                        if topic_id > 10:
+                                            if topic_id in topic_id_votes:
+                                                topic_id_votes[topic_id] += 1
+                                            else:
+                                                topic_id_votes[topic_id] = 1
                         except:
                             continue
 
-                    # 处理文件路径，支持分号分隔的多个路径
-                    valid_topic_ids = []
-                    for file_path_entry in file_paths:
-                        # 分割多个文件路径
-                        paths = file_path_entry.split(';')
-                        for path in paths:
-                            # 提取文件名中的数字
-                            match = re.search(r'_(\d+)\.json$', path.strip())
-                            if match:
-                                topic_id = int(match.group(1))
-                                # 只选择数字大于10的主题ID
-                                if topic_id > 10:
-                                    valid_topic_ids.append(str(topic_id))
-                                    break  # 找到第一个大于10的就停止
+                    # 根据得票数排序
+                    sorted_topics = sorted(topic_id_votes.items(), key=lambda x: x[1], reverse=True)
 
-                    # 处理前5个有效的主题ID
-                    for topic_id in valid_topic_ids[:5]:
-                        kg_link = f"{self.config['links']['forum_base_url']}{self.config['links']['topic_path_prefix']}/{topic_id}"
-                        kg_links.append(kg_link)
+                    # 按照规则选择知识图谱链接:
+                    # 1. 如果前4个都大于6票，则最多保留4个
+                    # 2. 如果大于6票的不足4个，则按实际个数保留
+
+                    # 首先统计得票大于6的链接数量
+                    high_vote_topics = [(topic_id, votes) for topic_id, votes in sorted_topics if
+                                        votes > KG_VOTE_THRESHOLD]
+
+                    if len(high_vote_topics) >= KG_HIGH_VOTE_MIN_COUNT:
+                        # 如果得票大于5的有4个或以上，保留4个
+                        for topic_id, votes in high_vote_topics[:KG_HIGH_VOTE_MIN_COUNT]:
+                            kg_link = f"{forum_base_url}/t/topic/{topic_id}"
+                            kg_links.append(kg_link)
+                            kg_topic_ids.append(topic_id)
+                            added_topic_ids.add(topic_id)
+                    else:
+                        # 如果得票大于6的不足4个，则保留得票数最高的3个（或者有多少保留多少，最多3个）
+                        top_topics = sorted_topics[:KG_TOP_COUNT_IF_LOW_VOTE] if sorted_topics else []
+                        for topic_id, votes in top_topics:
+                            kg_link = f"{forum_base_url}/t/topic/{topic_id}"
+                            kg_links.append(kg_link)
+                            kg_topic_ids.append(topic_id)
+                            added_topic_ids.add(topic_id)
 
             except Exception as e:
                 logger.error(f"处理KG实体链接时出错: {e}")
 
-            # 合并所有链接，最多10个
-        all_links = links + kg_links
-        all_links = all_links[:10]  # 最多保留10个链接
+        # 处理搜索结果链接（至少保留1个，最多保留5个）
+        search_links = []
+        search_topic_ids = []
+        if search_results:
+            # 最多取前5个搜索结果，但要过滤掉包含"news"的路径
+            filtered_search_results = []
+            for result in search_results:
+                path = result.get('path', '')
+                # 过滤掉包含"news"的路径
+                if 'news' not in path.lower():
+                    filtered_search_results.append(result)
+                    # 如果已经收集到足够的链接（总共5个），就停止
+                    if len(filtered_search_results) >= MAX_SEARCH_RESULTS:
+                        break
 
-        # 格式化为文本
+            # 最多取前5个搜索结果
+            for result in filtered_search_results:
+                path = result.get('path', '')
+                if path.startswith('/t/topic'):
+                    # 提取topic_id
+                    topic_match = re.search(r'/t/topic/(\d+)', path)
+                    if topic_match:
+                        topic_id = int(topic_match.group(1))
+                        # 检查是否与知识图谱链接重复
+                        if topic_id not in added_topic_ids:
+                            full_url = forum_base_url + path
+                            search_links.append(full_url)
+                            search_topic_ids.append(topic_id)
+                            added_topic_ids.add(topic_id)
+                            # 如果已经收集到足够的链接（总共5个），就停止
+                            if len(kg_links) + len(search_links) >= MAX_SEARCH_RESULTS:
+                                break
+                    else:
+                        full_url = forum_base_url + path
+                        search_links.append(full_url)
+                        # 如果已经收集到足够的链接（总共5个），就停止
+                        if len(kg_links) + len(search_links) >= MAX_SEARCH_RESULTS:
+                            break
+                else:
+                    full_url = docs_base_url + path
+                    if full_url not in search_links:
+                        search_links.append(full_url)
+                    # 如果已经收集到足够的链接（总共5个），就停止
+                    if len(kg_links) + len(search_links) >= MAX_SEARCH_RESULTS:
+                        break
+
+        # 组合链接，总共确保5个（如果可能的话）
+        # 1. 先添加知识图谱链接
+        all_links.extend(kg_links)
+
+        # 2. 添加搜索链接，直到达到5个或者没有更多链接
+        for link in search_links:
+            if len(all_links) >= MAX_SEARCH_RESULTS:
+                break
+            if link not in all_links:
+                all_links.append(link)
+
+        # 3. 如果链接还不够5个，继续从搜索结果中补充（即使会重复知识图谱中的链接）
+        if len(all_links) < MAX_LINKS and search_results:
+            for result in search_results:
+                if len(all_links) >= MAX_LINKS:
+                    break
+                path = result.get('path', '')
+                if 'news' in path.lower():
+                    continue
+                if path.startswith('/t/topic'):
+                    full_url = forum_base_url + path
+                else:
+                    full_url = docs_base_url + path
+                # 避免完全相同的链接重复
+                if full_url not in all_links:
+                    all_links.append(full_url)
+
+        # 4. 如果还是不够5个，从知识图谱中补充
+        if len(all_links) < MAX_LINKS and kg_links:
+            for i, link in enumerate(kg_links):
+                if len(all_links) >= MAX_LINKS:
+                    break
+                # 避免完全相同的链接重复
+                if link not in all_links:
+                    all_links.append(link)
+
+        # 最多保留5个链接
+        all_links = all_links[:MAX_LINKS]
+
+        # 格式化输出
         if all_links:
-            links_text = "相关链接：\n" + "\n".join(all_links)
-            return links_text
+            formatted_links = []
+            for i, link in enumerate(all_links, 1):
+                formatted_links.append(f"{i}. {link}")
+            return "相关链接：\n" + "\n".join(formatted_links)
         else:
             return ""
 
@@ -212,6 +325,9 @@ class ForumMonitor:
                     if not retrieval_result or 'related_docs' not in retrieval_result:
                         logger.warning(f"帖子 {topic_id} 的检索结果为空，使用空字符串继续处理")
                         retrieval_result = {'topic_id': topic_id, 'related_docs': ''}
+                        if not search_results:
+                            logger.info(f"帖子 {topic_id} 既没有搜索结果也没有检索结果，跳过回答")
+                            continue
 
                     retrieval_result['related_docs'] = self.data_processor.format_search_results_for_prompt(
                         retrieval_result, search_results
@@ -219,6 +335,9 @@ class ForumMonitor:
                 except Exception as e:
                     logger.error(f"帖子 {topic_id} 检索文档时发生异常: {e}，使用空字符串继续处理")
                     retrieval_result = {'topic_id': topic_id, 'related_docs': ''}
+                    if not search_results:
+                        logger.info(f"帖子 {topic_id} 既没有搜索结果也没有检索结果，跳过回答")
+                        continue
 
                 retrieval_results.append(retrieval_result)
 
@@ -247,11 +366,11 @@ class ForumMonitor:
                 # 为单个topic创建临时列表
                 single_topic_list = [topic]
 
-                answer_data = [{
-                    'id': topic_id,
-                    'title': topic['title'],
-                    'llm_answer': answer_with_notice
-                }]
+                # answer_data = [{
+                #     'id': topic_id,
+                #     'title': topic['title'],
+                #     'llm_answer': answer_with_notice
+                # }]
 
                 reply_result = self.forum_client.reply_to_topic(topic_id, answer_with_notice)
                 if reply_result['success']:
@@ -265,10 +384,10 @@ class ForumMonitor:
                 # 将包含AI回答的数据写入CSV文件
                 self.data_processor.append_to_csv(single_topic_list, processed_csv_file)
                 # self.data_processor.append_to_answer_csv(answer_data, answer_csv_file)
-                # self.data_processor.append_to_db(single_topic_list, 'processed_forum_topics')
-                #
-                # # 将token使用量数据写入consume_tokens_topic表
-                # self.data_processor.save_token_usage_to_db(topic_id, token_usage)
+                self.data_processor.append_to_db(single_topic_list, 'processed_forum_topics')
+
+                # 将token使用量数据写入consume_tokens_topic表
+                self.data_processor.save_token_usage_to_db(topic_id, token_usage)
                 #
                 # # 同步到Git仓库
                 # self._sync_csv_to_git_repo(answer_csv_file, topic_id)
