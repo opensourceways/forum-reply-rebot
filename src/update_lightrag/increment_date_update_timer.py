@@ -142,7 +142,8 @@ class UpdateIncrementData:
         clear_directory(self.config['lightrag_paths']['lightrag_root_dir'],
                         self.config['lightrag_paths']['update_time'])
 
-        update_time = datetime.fromisoformat(get_last_update_time(self.config['lightrag_paths']['update_time']))
+        update_time = datetime.fromisoformat(
+            get_last_update_time(self.config['lightrag_paths']['update_time'], self.config['last_update_time']))
         self.get_new_forum_data(update_time)  # 获取论坛数据
         save_last_update_time(self.config['lightrag_paths']['update_time'])
         self.get_increment_update_file(self.config['lightrag_paths']['rag_data_dir'],
@@ -159,6 +160,7 @@ class UpdateIncrementData:
 
 class UpdateLightRAGTimer:
     """RAG数据刷新定时器类"""
+
     def __init__(self):
         """
         初始化定时器
@@ -172,7 +174,7 @@ class UpdateLightRAGTimer:
         # 设置定时任务
         logger.info("启动定时任务")
         schedule_interval = self.config['timer']['schedule_interval']
-        self.job = schedule.every(schedule_interval).day.at('09:20').do(
+        self.job = schedule.every(schedule_interval).day.at('09:40').do(
             self.update_increment_data.update_lightrag_task)
 
         # 运行定时任务循环
