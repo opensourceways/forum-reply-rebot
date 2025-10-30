@@ -27,7 +27,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY . .
 
 # 创建必要的目录
-RUN mkdir -p data/forum_data logs && \
+RUN mkdir -p data/forum_data logs lightrag_data/rag_data && \
     chown -R appuser:appuser /app
 
 # 切换到普通用户
