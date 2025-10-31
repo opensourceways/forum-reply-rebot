@@ -14,6 +14,8 @@ def setup_logger(name, log_file=None, level=logging.INFO):
     logger = logging.getLogger(name)
     logger.setLevel(level)
 
+    logger.propagate = False
+
     # 控制台处理器
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(formatter)

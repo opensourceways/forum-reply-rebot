@@ -1,5 +1,7 @@
 from flask import Flask, jsonify
 from src.ForumBot.monitor import ForumMonitor
+from src.update_lightrag.full_data_init import FullDataUpdate
+from src.update_lightrag.increment_date_update_timer import UpdateLightRAGTimer
 from src.ForumBot.logging_config import setup_logger
 import os
 import threading
@@ -51,6 +53,44 @@ def initialize_service():
     except Exception as e:
         logger.error(f"服务初始化失败: {e}")
         service_initialized = False
+        return False
+
+# LightRAG数据初始化
+def lightrag_data_init(config):
+    """
+    LightRAG数据初始化
+    """
+    try:
+        logger.info("开始初始化LightRAG数据...")
+        full_data_update = FullDataUpdate(config=config)
+        full_data_update.update_full_data()
+
+        logger.info("LightRAG数据初始化成功")
+        return True
+    except Exception as e:
+        logger.error(f"LightRAG数据初始化失败: {e}")
+        return False
+
+# LightRAG数据更新定时器
+def lightrag_data_update_timer(config):
+    """
+    在线程中启动lightrag更新定时器
+    """
+
+    try:
+        logger.info("启动LightRAG更新定时器")
+        # 初始化定时器
+        update_lightrag_timer = UpdateLightRAGTimer(config=config)
+
+        # 在单独线程中启动定时器
+        scheduler_thread = threading.Thread(target=update_lightrag_timer.run_scheduler)
+        scheduler_thread.daemon = True  # 设置为守护线程
+        scheduler_thread.start()
+
+        logger.info("LightRAG更新定时器启动成功")
+        return True
+    except Exception as e:
+        logger.error(f"LightRAG更新定时器启动失败: {e}")
         return False
 
 @app.route('/health', methods=['GET'])
@@ -114,10 +154,19 @@ def main():
         os.makedirs('logs', exist_ok=True)
         logger.info("目录检查完成")
 
+    # 初始化数据
+    if not lightrag_data_init(config):
+        logger.error("LightRAG数据初始化失败，应用退出")
+        return
+
     # 初始化服务
     if not initialize_service():
         logger.error("服务初始化失败，应用退出")
         return
+
+    # 启动数据更新定时器
+    if not lightrag_data_update_timer(config):
+        logger.error("LightRAG数据更新定时器启动失败")
 
     # 启动Flask应用，端口可以根据需要修改
     app.run(host='0.0.0.0', port=5000, debug=False)
