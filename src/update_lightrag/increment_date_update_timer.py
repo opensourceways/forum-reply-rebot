@@ -160,12 +160,12 @@ class UpdateIncrementData:
 
 class UpdateLightRAGTimer:
     """RAG数据刷新定时器类"""
-
-    def __init__(self):
-        """
-        初始化定时器
-        """
-        self.config = load_config()
+    def __init__(self, config_file='config/config.yaml', config=None):
+        # 如果提供了已加载的配置，则使用它；否则从文件加载
+        if config is not None:
+            self.config = config
+        else:
+            self.config = load_config(config_file)
         self.update_increment_data = UpdateIncrementData(self.config)
         self.job = None
 
@@ -174,7 +174,7 @@ class UpdateLightRAGTimer:
         # 设置定时任务
         logger.info("启动定时任务")
         schedule_interval = self.config['timer']['schedule_interval']
-        self.job = schedule.every(schedule_interval).day.at('18:00').do(
+        self.job = schedule.every(schedule_interval).day.at('18:00').do(  # 容器内使用标准时间，对应东八区时间凌晨02:00
             self.update_increment_data.update_lightrag_task)
 
         # 运行定时任务循环

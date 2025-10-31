@@ -16,7 +16,7 @@ def load_config(config_file='config/config.yaml'):
 def clear_directory(directory_path, ignore_file):
     """只删除文件，保留目录结构"""
     if not os.path.exists(directory_path):
-        print(f"目录 {directory_path} 不存在")
+        logging.error(f"目录 {directory_path} 不存在")
         return
 
     ignore_file_name = os.path.basename(ignore_file)

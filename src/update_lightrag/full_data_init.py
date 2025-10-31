@@ -13,8 +13,12 @@ from src.utils import load_config
 
 
 class FullDataUpdate:
-    def __init__(self):
-        self.config = load_config()
+    def __init__(self, config_file='config/config.yaml', config=None):
+        # 如果提供了已加载的配置，则使用它；否则从文件加载
+        if config is not None:
+            self.config = config
+        else:
+            self.config = load_config(config_file)
         self.forum_data_fetcher = ForumDataFetcher(self.config)
         self.lightrag_client = LightRAGClient(self.config)
         self.filter = Filter(self.config)
@@ -107,7 +111,8 @@ class FullDataUpdate:
             if self.lightrag_client.is_all_file_processed(self.config['retrieval']['base_url']):
                 logger.info("所有文件处理完成")
                 # 清空本地文件夹
-                clear_directory(self.config['lightrag_paths']['lightrag_root_dir'])
+                clear_directory(self.config['lightrag_paths']['lightrag_root_dir'],
+                        self.config['lightrag_paths']['update_time'])
                 break
             else:
                 time.sleep(5)

@@ -56,13 +56,13 @@ def initialize_service():
         return False
 
 # LightRAG数据初始化
-def lightrag_data_init():
+def lightrag_data_init(config):
     """
     LightRAG数据初始化
     """
     try:
         logger.info("开始初始化LightRAG数据...")
-        full_data_update = FullDataUpdate()
+        full_data_update = FullDataUpdate(config=config)
         full_data_update.update_full_data()
 
         logger.info("LightRAG数据初始化成功")
@@ -72,15 +72,15 @@ def lightrag_data_init():
         return False
 
 # LightRAG数据更新定时器
-def lightrag_data_update_timer():
+def lightrag_data_update_timer(config):
     """
     在线程中启动lightrag更新定时器
     """
 
     try:
         logger.info("启动LightRAG更新定时器")
-        # 初始化监控器
-        update_lightrag_timer = UpdateLightRAGTimer()
+        # 初始化定时器
+        update_lightrag_timer = UpdateLightRAGTimer(config=config)
 
         # 在单独线程中启动定时器
         scheduler_thread = threading.Thread(target=update_lightrag_timer.run_scheduler)
@@ -155,7 +155,7 @@ def main():
         logger.info("目录检查完成")
 
     # 初始化数据
-    if not lightrag_data_init():
+    if not lightrag_data_init(config):
         logger.error("LightRAG数据初始化失败，应用退出")
         return
 
@@ -165,7 +165,7 @@ def main():
         return
 
     # 启动数据更新定时器
-    if not lightrag_data_update_timer():
+    if not lightrag_data_update_timer(config):
         logger.error("LightRAG数据更新定时器启动失败")
 
     # 启动Flask应用，端口可以根据需要修改
