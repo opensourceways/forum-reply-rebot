@@ -28,3 +28,20 @@ def clear_directory(directory_path, ignore_file):
             file_path = os.path.join(root, file)
             os.remove(file_path)
     logging.info(f"已清空目录 {directory_path}")
+
+def delete_config_file(config_file='config/config.yaml'):
+    """
+    删除配置文件以防止敏感信息落盘
+    """
+    try:
+        if os.path.exists(config_file):
+            os.remove(config_file)
+            # 验证文件是否真的被删除
+            if os.path.exists(config_file):
+                logging.warning(f"配置文件 {config_file} 似乎未被成功删除")
+            else:
+                logging.info(f"已成功删除配置文件 {config_file}")
+        else:
+            logging.info(f"配置文件 {config_file} 不存在")
+    except Exception as e:
+        logging.error(f"删除配置文件失败: {e}")

@@ -5,10 +5,13 @@ from src.update_lightrag.increment_date_update_timer import UpdateLightRAGTimer
 from src.ForumBot.logging_config import setup_logger
 import os
 import threading
+import netifaces
+import socket
+import ipaddress
 import time
 
-# 设置主日志记录器
-logger = setup_logger('main', 'logs/main.log')
+# 设置主日志记录器，启用日志轮转
+logger = setup_logger('main', 'logs/main.log', max_bytes=20*1024*1024, backup_count=4)
 
 # 初始化 Flask 应用
 app = Flask(__name__)
@@ -32,7 +35,64 @@ class MonitorThread(threading.Thread):
         except Exception as e:
             logger.error(f"监控线程运行出错: {e}")
 
-def initialize_service():
+def get_private_ips_netifaces():
+    private_ips = []
+    for interface in netifaces.interfaces():
+        if netifaces.AF_INET in netifaces.ifaddresses(interface):
+            for address in netifaces.ifaddresses(interface)[netifaces.AF_INET]:
+                ip = address['addr']
+                if ip != '127.0.0.1' and ipaddress.ip_address(ip).is_private:
+                    private_ips.append(ip)
+    return private_ips
+
+def get_best_private_ip():
+    try:
+        ips = get_private_ips_netifaces()
+    except ImportError:
+        ips = get_local_ips()
+
+    if not ips:
+        raise RuntimeError("无法获取本地IP地址")
+
+    for ip in ips:
+        if ip.startswith('10.'):
+            return ip
+    for ip in ips:
+        if ip.startswith('192.168.'):
+            return ip
+    return ips[0]
+
+def is_private_ip(ip):
+    """
+    判断IP地址是否为私有地址
+    """
+    try:
+        ip_address = ipaddress.ip_address(ip)
+        return ip_address.is_private
+    except ValueError:
+        return False
+
+
+def get_local_ips():
+    """
+    获取本地所有IP地址
+    """
+    private_ips = []
+    hostname = socket.gethostname()
+    try:
+        addrinfo = socket.getaddrinfo(hostname, None)
+        for family, type, proto, canonname, sockaddr in addrinfo:
+            if family == socket.AF_INET:
+                ip = sockaddr[0]
+                if is_private_ip(ip) and ip != '127.0.0.1':
+                    private_ips.append(ip)
+    except socket.gaierror:
+        pass
+
+    return private_ips
+
+
+def initialize_service(config):
     """
     初始化服务组件
     """
@@ -40,8 +100,9 @@ def initialize_service():
 
     try:
         logger.info("开始初始化服务...")
-        # 初始化监控器
-        monitor_instance = ForumMonitor()
+
+        # 初始化监控器，传递已加载的配置
+        monitor_instance = ForumMonitor(config=config)
 
         # 在单独的线程中启动监控器
         monitor_thread = MonitorThread(monitor_instance)
@@ -136,8 +197,10 @@ def main():
     logger.info("Robot应用启动")
     # 确保必要目录存在
     try:
-        from src.utils import load_config
+        from src.utils import load_config, delete_config_file
         config = load_config()
+        # 删除配置文件以防止敏感信息落盘
+        delete_config_file()
 
         # 确保数据目录存在
         data_dir = config.get('paths', {}).get('forum_data_dir', 'data/forum_data')
@@ -160,7 +223,7 @@ def main():
         return
 
     # 初始化服务
-    if not initialize_service():
+    if not initialize_service(config):
         logger.error("服务初始化失败，应用退出")
         return
 
@@ -169,7 +232,8 @@ def main():
         logger.error("LightRAG数据更新定时器启动失败")
 
     # 启动Flask应用，端口可以根据需要修改
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    bind_ip = get_best_private_ip()
+    app.run(host=bind_ip, port=5000, debug=False)
 
 if __name__ == "__main__":
     main()
