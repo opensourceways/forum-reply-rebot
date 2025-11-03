@@ -138,6 +138,10 @@ class UpdateIncrementData:
             logger.info("当前管道状态为忙碌，暂不更新")
             return
 
+        if not self.lightrag_client.is_all_file_processed(self.config['retrieval']['base_url']):
+            logger.info("当前文件未处理完成，暂不更新")
+            return
+
         # 获取论坛数据之前先清理文件夹
         clear_directory(self.config['lightrag_paths']['lightrag_root_dir'],
                         self.config['lightrag_paths']['update_time'])

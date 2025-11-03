@@ -15,7 +15,7 @@ class ImageProcessor:
         self.model_list = [
             config['image_processing']['model1'],
             config['image_processing']['model2'],
-            config['image_processing']['model3'],
+            config['image_processing']['model3']
         ]
 
     def process_image_content(self, image_url):
@@ -58,8 +58,7 @@ class ImageProcessor:
                             },
                         }],
                     }],
-                    stream=False,
-                    timeout=600
+                    stream=False
                 )
                 return response.choices[0].message.content
             except Exception as e:
