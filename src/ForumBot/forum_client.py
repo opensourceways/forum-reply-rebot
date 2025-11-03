@@ -45,7 +45,8 @@ class ForumClient:
                 f"{self.config['posts']['base_url']}/posts.json",
                 headers=headers,
                 data=json.dumps(payload),
-                verify=verify_ssl
+                verify=verify_ssl,
+                timeout=30
             )
 
             if response.status_code == 200:
@@ -99,7 +100,7 @@ class ForumClient:
         }
 
         try:
-            response = requests.post(url, headers=headers, json=data, verify=verify_ssl)
+            response = requests.post(url, headers=headers, json=data, verify=verify_ssl, timeout=30)
 
             if response.status_code == 200:
                 result = response.json()
@@ -166,7 +167,7 @@ class ForumClient:
         }
 
         try:
-            response = requests.post(url, json=payload, verify=verify_ssl)
+            response = requests.post(url, json=payload, verify=verify_ssl, timeout=600)
             response.raise_for_status()
             result = response.json()
             return result.get("response")

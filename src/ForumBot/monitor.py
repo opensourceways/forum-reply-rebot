@@ -22,8 +22,12 @@ MAX_LINKS = 5  # 最大链接数量
 MAX_SEARCH_RESULTS = 5  # 最大搜索结果数量
 
 class ForumMonitor:
-    def __init__(self, config_file='config/config.yaml'):
-        self.config = load_config(config_file)
+    def __init__(self, config_file='config/config.yaml',config=None):
+        # 如果提供了已加载的配置，则使用它；否则从文件加载
+        if config is not None:
+            self.config = config
+        else:
+            self.config = load_config(config_file)
         self.forum_client = ForumClient(self.config)
         self.ai_processor = AIProcessor(self.config)
         self.data_processor = DataProcessor(self.config)
@@ -299,6 +303,11 @@ class ForumMonitor:
             logger.info(f"正在处理帖子 {topic_id} ({i + 1}/{len(new_topics)})")
             try:
                 retrieval_results = []
+                # 检查是否为提示词注入攻击
+                is_injection = self.ai_processor.check_prompt_injection(topic['title'], topic['user_question'])
+                if is_injection.lower() == 'yes':
+                    logger.info(f"帖子 {topic_id} 被识别为提示词注入攻击，跳过处理")
+                    continue
                 logger.info(f"正在为帖子 {topic_id} 生成摘要...")
                 summary = self.ai_processor.summarize_text(topic['title'], topic['user_question'],topic_id)
                 topic['summary_question'] = summary
@@ -349,10 +358,19 @@ class ForumMonitor:
                         topic['user_question'],
                         topic_id
                     )
+                    # 检查大模型是否正常返回答案
+                    if answer.startswith("处理失败:") or answer.startswith("未知错误:"):
+                        logger.info(f"帖子 {topic_id} 的大模型处理失败，跳过回复: {answer}")
+                        continue
                 except Exception as e:
                     logger.error(f"帖子 {topic_id} 调用大模型时发生异常: {e}，使用默认回答继续处理")
                     answer = "抱歉，暂时无法生成回答。"
 
+                # 检查生成的答案与搜索结果是否相关
+                is_relevant = self.ai_processor.check_answer_relevance(answer, search_results)
+                if is_relevant.lower() != 'yes':
+                    logger.info(f"帖子 {topic_id} 的答案与搜索结果不相关，跳过回复")
+                    continue
                 # 添加相关链接
                 links_section = self._generate_related_links(search_results, retrieval_result.get('related_docs', ''))
 
