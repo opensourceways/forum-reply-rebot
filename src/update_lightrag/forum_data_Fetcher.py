@@ -19,9 +19,9 @@ class ForumDataFetcher:
             'no_definitions': True,
         }
 
-        verify_ssl = self.config.get('forum', {}).get('verify_ssl', True)
+        verify_ssl = self.config.get('lightrag_forum_data', {}).get('verify_ssl', True)
         response = requests.get(
-            f"{self.config['forum']['base_url']}/latest.json",
+            f"{self.config['lightrag_forum_data']['base_url']}/latest.json",
             params=params,
             timeout=10,
             verify=verify_ssl
@@ -71,7 +71,7 @@ class ForumDataFetcher:
         """
         topic_id = topic['id']
         topic_title = topic['title']
-        topic_url = f"{self.config['forum']['base_url']}/t/{topic_id}.json"
+        topic_url = f"{self.config['lightrag_forum_data']['base_url']}/t/{topic_id}.json"
 
         safe_title = re.sub(r'[^\w\s-]', '', topic_title).strip()
         safe_title = re.sub(r'[-\s]+', '_', safe_title)  # Replace spaces and hyphens with underscores
@@ -83,7 +83,7 @@ class ForumDataFetcher:
             'track_visit': True,
             'forceLoad': True,
         }
-        verify_ssl = self.config.get('forum', {}).get('verify_ssl', True)
+        verify_ssl = self.config.get('lightrag_forum_data', {}).get('verify_ssl', True)
         try:
             response = requests.get(
                 topic_url,
