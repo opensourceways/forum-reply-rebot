@@ -15,6 +15,7 @@ class ImageProcessor:
         self.model_list = [
             config['image_processing']['model1'],
             config['image_processing']['model2'],
+            config['image_processing']['model3'],
         ]
 
     def process_image_content(self, image_url):

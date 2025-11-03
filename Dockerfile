@@ -79,6 +79,8 @@ RUN chmod -R 750 /app && \
     chmod -R 600 /app/config/config.yaml && \
     chmod -R 700 /app/data && \
     chmod -R 700 /app/data/forum_data && \
+    chmod -R 700 /app/lightrag_data && \
+    chmod -R 700 /app/lightrag_data/rag_data && \
     find /app/data/forum_data -type f -exec chmod 600 {} \; && \
     rm -rf /app/data/forum_data/lost+found
 
