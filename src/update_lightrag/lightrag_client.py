@@ -9,6 +9,7 @@ from src.ForumBot.logging_config import main_logger as logger
 class LightRAGClient:
     def __init__(self, config):
         self.config = config
+        self.verify_ssl = self.config.get('retrieval', {}).get('verify_ssl', True)
 
     def upload_document(self, file_path, api_url, api_key=None):
         """
@@ -22,7 +23,7 @@ class LightRAGClient:
 
         with open(file_path, 'rb') as file:
             files = {'file': file}
-            response = requests.post(url, files=files, headers=headers)
+            response = requests.post(url, files=files, headers=headers, timeout=10, verify=self.verify_ssl)
 
         return response.json()
 
@@ -85,7 +86,6 @@ class LightRAGClient:
 
         return uploaded_documents
 
-
     def delete_document(self, doc_id, api_url, api_key=None):
         """
         删除lightRAG系统上的文档
@@ -101,7 +101,7 @@ class LightRAGClient:
             "delete_file": False
         }
 
-        response = requests.delete(url, json=data, headers=headers)
+        response = requests.delete(url, json=data, headers=headers, timeout=10, verify=self.verify_ssl)
 
         return response.json()
 
@@ -190,7 +190,6 @@ class LightRAGClient:
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(existing_mapping, f, indent=2, ensure_ascii=False)
 
-
     def get_filename_id_mapping_from_lightrag(self, base_url, limit=50):  # 分页数据每页数据必须大于等于10
         """
         从lightRAG获取文件名称与文件id映射
@@ -199,14 +198,15 @@ class LightRAGClient:
 
         while True:
             try:
-            # 构造分页请求
+                # 构造分页请求
                 payload = {
                     "page": page,
                     "page_size": limit
                 }
 
                 # 发送请求
-                response = requests.post(f"{base_url}/documents/paginated", json=payload)
+                response = requests.post(f"{base_url}/documents/paginated", json=payload, timeout=10,
+                                         verify=self.verify_ssl)
                 response.raise_for_status()
                 result = response.json()
 
@@ -250,7 +250,9 @@ class LightRAGClient:
             # 发送请求到/documents/paginated接口
             response = requests.post(
                 f"{api_url}/documents/paginated",
-                json=payload
+                json=payload,
+                timeout=10,
+                verify=self.verify_ssl
             )
             response.raise_for_status()
             data = response.json()
@@ -286,7 +288,9 @@ class LightRAGClient:
             # 发送请求
             response = requests.post(
                 f"{self.config['retrieval']['base_url']}/documents/paginated",
-                json=payload
+                json=payload,
+                timeout=10,
+                verify=self.verify_ssl
             )
             response.raise_for_status()
             result = response.json()
@@ -305,7 +309,6 @@ class LightRAGClient:
             logger.error(f"解析LightRAG数据状态时发生错误: {e}")
             return None
 
-
     def is_pipeline_status_busy(self, api_url, api_key=None):
         """
             获取文档索引管道的当前状态，管道状态忙碌时无法删除文件
@@ -319,7 +322,7 @@ class LightRAGClient:
 
         response = None
         try:
-            response = requests.get(url, headers=headers)
+            response = requests.get(url, headers=headers, timeout=10, verify=self.verify_ssl)
             response.raise_for_status()  # 检查HTTP状态码
             status_data = response.json()
 
