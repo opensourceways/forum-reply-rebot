@@ -81,9 +81,11 @@ class ForumClient:
         url = f"{base_url}{endpoint}"
         # 获取SSL验证设置
         verify_ssl = self.config.get('search', {}).get('verify_ssl', True)
+        referer = self.config.get('search', {}).get('referer', "")
 
         headers = {
-            "source": self.config['search']['source']
+            "source": self.config['search']['source'],
+            "referer": referer
         }
 
         # 截断过长的关键字
