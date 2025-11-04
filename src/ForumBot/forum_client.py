@@ -20,7 +20,7 @@ class ForumClient:
         """
         获取所有论坛主题
         """
-        return fetch_all_forum_topics()
+        return fetch_all_forum_topics(self.config)
 
     def reply_to_topic(self, topic_id, reply_content):
         """
