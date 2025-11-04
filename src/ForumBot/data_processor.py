@@ -46,11 +46,11 @@ def fetch_topic_details(topic_id, config=None):
         return None
 
 
-def fetch_all_forum_topics(sort="newest", config=None):
+def fetch_all_forum_topics(config):
     # 如果没有传入配置，则加载默认配置
     if config is None:
-        from src.utils import load_config
-        config = load_config()
+        logger.error("未提供配置文件")
+        return []
 
     base_url = config.get('forum', {}).get('base_url', '') + "/latest.json"
     page = 0
