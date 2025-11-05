@@ -13,6 +13,10 @@ class AIProcessor:
             base_url=config['api']['base_url'],
             api_key=config['api']['api_key']
         )
+        self.model_list = [
+            config['api']['model2_name'],
+            config['api']['model_name'],
+        ]
 
     def summarize_text(self, title, user_question, topic_id, max_length=None):
         """
@@ -212,18 +216,17 @@ class AIProcessor:
         """
         # 构建搜索结果的文本
         sys_prompt_template = """
-        - Role: 文本相关性检测专家
         - Role: 答案检查专家
-        - Background: 用户在使用大模型生成答案时，需要一个可靠的方法来判断生成的答案是否真正解决了他们的问题。用户希望避免浪费时间在无效或不完整的回答上，因此需要一个明确的判断标准。
-        - Profile: 你是一位经验丰富的答案检查专家，擅长分析文本内容，能够快速判断回答是否满足用户的问题需求。你对语言的理解能力极强，能够精准识别回答中的关键信息。
-        - Skills: 你具备文本分析、逻辑判断、语言理解以及快速决策的能力，能够高效地识别回答中的有效性和完整性。
-        - Goals: 判断大模型生成的答案是否能够解答用户的问题，并根据特定关键词（如“无法提供”“无法回答”“抱歉”“无法得知”“不知道”等）判断答案是否无效。
-        - Constrains: 仅根据生成的答案内容进行判断，不考虑问题的具体内容。如果答案中明确包含“无法提供”“无法回答”“抱歉”“无法得知”“不知道”等字眼，则判定为不能回答用户问题。
-        - OutputFormat: 输出“yes”或“no”，表示答案是否能够解答用户问题。
+        - Background: 用户需要一个可靠的方法来判断大模型生成的答案是否真正解决了他们的问题。用户希望避免模型给出模棱两可或明确表示无法回答的情况，确保得到有效的信息。
+        - Profile: 你是一位经验丰富的答案检查专家，擅长分析和评估模型生成的答案是否准确、完整且具有针对性。你能够敏锐地识别出模型是否真正回答了问题，或者是否以“无法回答”“无法提供”“抱歉”“无法得知”“不知道”等措辞回避问题。
+        - Skills: 你具备精准的文本分析能力、逻辑判断能力以及对语言表达的深度理解。能够快速识别模型答案中的关键信息，并判断其是否与用户问题直接相关。
+        - Goals: 判断大模型生成的答案是否能够有效回答用户的问题，如果答案中明确包含“无法回答”“无法提供”“抱歉”“无法得知”“不知道”等表述，则判定为不能回答用户问题；否则判定为能回答用户问题。
+        - Constrains: 仅根据模型生成的答案内容进行判断，不考虑问题的具体内容或背景。严格依据答案中是否明确表示无法回答来做出“yes”或“no”的判定。
+        - OutputFormat: 输出“yes”表示模型答案能回答用户问题，输出“no”表示模型答案不能回答用户问题。
         - Workflow:
-          1. 接收大模型生成的答案。
-          2. 检查答案中是否包含“无法提供”“无法回答”“抱歉”“无法得知”“不知道”等关键词。
-          3. 根据关键词的出现与否，输出“yes”或“no”。
+          1. 仔细阅读大模型生成的答案。
+          2. 检查答案中是否明确包含“无法回答”“无法提供”“抱歉”“无法得知”“不知道”等表述。
+          3. 根据检查结果，输出“yes”或“no”。
         - Examples:
           - 例子1：用户问题：“巴黎的埃菲尔铁塔有多高？”
             模型答案：“巴黎的埃菲尔铁塔高度为300米。”
@@ -235,45 +238,55 @@ class AIProcessor:
         user_prompt_template = """
         用户问题：{}
         模型答案：{}
+        判断结果：
         """
         query = f"{title}:{question}"
         text = user_prompt_template.format(query,answer)
         print("text: ")
         print(text)
-        try:
-            response = self.client.chat.completions.create(
-                model=self.config['api']['model2_name'],
-                messages=[
-                    {
-                        'role': 'system',
-                        'content': sys_prompt_template
-                    },
-                    {
-                        'role': 'user',
-                        'content': text
-                    }
-                ],
-                stream=False,
-                max_tokens=3  # 限制输出长度，只需要"yes"或"no"
-            )
-            result = response.choices[0].message.content.strip().lower()
-            # 如果提供了topic_id，则记录token使用量
-            if topic_id and hasattr(response, 'usage'):
-                token_tracker.add_usage(
-                    topic_id,
-                    prompt_tokens=response.usage.prompt_tokens if hasattr(response.usage, 'prompt_tokens') else 0,
-                    completion_tokens=response.usage.completion_tokens if hasattr(response.usage,
-                                                                                  'completion_tokens') else 0,
-                    total_tokens=response.usage.total_tokens if hasattr(response.usage, 'total_tokens') else 0
+        # 首先尝试默认模型
+        models = self.model_list
+        for i, model in enumerate(models):
+            try:
+                response = self.client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {
+                            'role': 'system',
+                            'content': sys_prompt_template
+                        },
+                        {
+                            'role': 'user',
+                            'content': text
+                        }
+                    ],
+                    stream=False,
+                    max_tokens=3  # 限制输出长度，只需要"yes"或"no"
                 )
-            # 确保返回值只能是"yes"或"no"
-            if "yes" in result:
-                return "yes"
-            else:
-                return "no"
-        except Exception as e:
-            logger.error(f"检查答案质量时出错: {e}")
-            return "no"  # 出错时默认不相关，避免发布不相关的内容
+                result = response.choices[0].message.content.strip().lower()
+                print("result: ")
+                print(result)
+                # 如果提供了topic_id，则记录token使用量
+                if topic_id and hasattr(response, 'usage'):
+                    token_tracker.add_usage(
+                        topic_id,
+                        prompt_tokens=response.usage.prompt_tokens if hasattr(response.usage, 'prompt_tokens') else 0,
+                        completion_tokens=response.usage.completion_tokens if hasattr(response.usage,
+                                                                                      'completion_tokens') else 0,
+                        total_tokens=response.usage.total_tokens if hasattr(response.usage, 'total_tokens') else 0
+                    )
+                # 确保返回值只能是"yes"或"no"
+                if "yes" in result:
+                    return "yes"
+                else:
+                    return "no"
+            except Exception as e:
+                logger.error(f"检查答案质量时出错: {e}")
+                # 如果是最后一个模型，抛出异常
+                if i == len(models) - 1:
+                    return "no"  # 出错时默认不相关，避免发布不相关的内容
+                else:
+                    logger.info(f"Retrying with next model: {models[i + 1]}")
 
 
     def call_large_model(self, text, title, user_question, topic_id, max_retries=3):

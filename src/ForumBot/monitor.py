@@ -379,7 +379,7 @@ class ForumMonitor:
 
                 # 检查生成的答案与搜索结果是否相关
                 is_relevant = self.ai_processor.check_answer_relevance(answer, context_data, topic_id)
-                # is_qualified = self.ai_processor.check_answer_quality(answer, topic['title'], topic['user_question'], topic_id)
+                is_qualified = self.ai_processor.check_answer_quality(answer, topic['title'], topic['user_question'], topic_id)
                 if is_relevant.lower() != 'yes':
                     topic['llm_answer'] = answer
                     token_usage = token_tracker.get_usage(topic_id)
@@ -395,6 +395,22 @@ class ForumMonitor:
                     # 将token使用量数据写入consume_tokens_topic表
                     self.data_processor.save_token_usage_to_db(topic_id, token_usage)
                     logger.info(f"帖子 {topic_id} 的答案与搜索结果不相关，跳过回复")
+                    continue
+                if is_qualified.lower() != 'yes':
+                    topic['llm_answer'] = answer
+                    token_usage = token_tracker.get_usage(topic_id)
+                    # 每处理完1个topic就处理检索结果
+                    self.data_processor.process_retrieval_results(retrieval_results)
+
+                    single_topic_list = [topic]
+
+                    # 将包含AI回答的数据写入CSV文件
+                    self.data_processor.append_to_csv(single_topic_list, processed_csv_file)
+                    self.data_processor.append_to_db(single_topic_list, 'processed_forum_topics')
+
+                    # 将token使用量数据写入consume_tokens_topic表
+                    self.data_processor.save_token_usage_to_db(topic_id, token_usage)
+                    logger.info(f"帖子 {topic_id} 的答案不符合要求，跳过回复")
                     continue
                 # 添加相关链接
                 links_section = self._generate_related_links(search_results, retrieval_result.get('related_docs', ''))
