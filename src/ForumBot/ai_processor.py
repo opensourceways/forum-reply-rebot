@@ -242,8 +242,7 @@ class AIProcessor:
         """
         query = f"{title}:{question}"
         text = user_prompt_template.format(query,answer)
-        print("text: ")
-        print(text)
+
         # 首先尝试默认模型
         models = self.model_list
         for i, model in enumerate(models):
@@ -264,8 +263,7 @@ class AIProcessor:
                     max_tokens=3  # 限制输出长度，只需要"yes"或"no"
                 )
                 result = response.choices[0].message.content.strip().lower()
-                print("result: ")
-                print(result)
+
                 # 如果提供了topic_id，则记录token使用量
                 if topic_id and hasattr(response, 'usage'):
                     token_tracker.add_usage(
