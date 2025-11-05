@@ -69,7 +69,7 @@ class AIProcessor:
             logger.error(f"生成摘要时出错: {e}")
             return "摘要生成失败"
 
-    def check_prompt_injection(self, title, user_question):
+    def check_prompt_injection(self, title, user_question, topic_id):
         """
         使用大模型检查是否为提示词注入攻击
 
@@ -109,7 +109,7 @@ class AIProcessor:
 
         try:
             response = self.client.chat.completions.create(
-                model=self.config['api']['model_name'],
+                model=self.config['api']['model2_name'],
                 messages=[
                     {"role": "system", "content": f"{sys_prompt}"},
                     {"role": "user", "content": f"{user_prompt}"}
@@ -119,6 +119,15 @@ class AIProcessor:
                 temperature=0.1  # 设置较低的temperature值以提高稳定性
             )
             result = response.choices[0].message.content.strip().lower()
+            # 如果提供了topic_id，则记录token使用量
+            if topic_id and hasattr(response, 'usage'):
+                token_tracker.add_usage(
+                    topic_id,
+                    prompt_tokens=response.usage.prompt_tokens if hasattr(response.usage, 'prompt_tokens') else 0,
+                    completion_tokens=response.usage.completion_tokens if hasattr(response.usage,
+                                                                                  'completion_tokens') else 0,
+                    total_tokens=response.usage.total_tokens if hasattr(response.usage, 'total_tokens') else 0
+                )
             # 确保返回值只能是"yes"或"no"
             if "yes" in result:
                 return "yes"
@@ -128,7 +137,7 @@ class AIProcessor:
             logger.error(f"检查提示词注入时出错: {e}")
             return "no"  # 出错时默认不是攻击，避免误杀正常用户
 
-    def check_answer_relevance(self, answer, search_results):
+    def check_answer_relevance(self, answer, search_results, topic_id):
         """
         使用大模型检查生成的答案与搜索结果是否相关
 
@@ -140,7 +149,6 @@ class AIProcessor:
             str: "yes" 或 "no"
         """
         # 构建搜索结果的文本
-        search_results_text = format_search_results_as_json(search_results)
         prompt_template = """
         - Role: 文本相关性检测专家
         - Background: 需要判断AI生成的答案是否与搜索结果相关，以确保回答的质量和准确性。
@@ -161,7 +169,7 @@ class AIProcessor:
           4. 回答"yes"表示相关，"no"表示不相关
         """
 
-        text = prompt_template.format(answer, search_results_text)
+        text = prompt_template.format(answer, search_results)
 
         try:
             response = self.client.chat.completions.create(
@@ -173,6 +181,15 @@ class AIProcessor:
                 max_tokens=3  # 限制输出长度，只需要"yes"或"no"
             )
             result = response.choices[0].message.content.strip().lower()
+            # 如果提供了topic_id，则记录token使用量
+            if topic_id and hasattr(response, 'usage'):
+                token_tracker.add_usage(
+                    topic_id,
+                    prompt_tokens=response.usage.prompt_tokens if hasattr(response.usage, 'prompt_tokens') else 0,
+                    completion_tokens=response.usage.completion_tokens if hasattr(response.usage,
+                                                                                  'completion_tokens') else 0,
+                    total_tokens=response.usage.total_tokens if hasattr(response.usage, 'total_tokens') else 0
+                )
             # 确保返回值只能是"yes"或"no"
             if "yes" in result:
                 return "yes"
@@ -180,6 +197,82 @@ class AIProcessor:
                 return "no"
         except Exception as e:
             logger.error(f"检查答案相关性时出错: {e}")
+            return "no"  # 出错时默认不相关，避免发布不相关的内容
+
+    def check_answer_quality(self, answer, title, question, topic_id):
+        """
+        使用大模型检查生成的答案与搜索结果是否相关
+
+        Args:
+            answer (str): 生成的答案
+            search_results (list): 搜索结果列表
+
+        Returns:
+            str: "yes" 或 "no"
+        """
+        # 构建搜索结果的文本
+        sys_prompt_template = """
+        - Role: 文本相关性检测专家
+        - Role: 答案检查专家
+        - Background: 用户在使用大模型生成答案时，需要一个可靠的方法来判断生成的答案是否真正解决了他们的问题。用户希望避免浪费时间在无效或不完整的回答上，因此需要一个明确的判断标准。
+        - Profile: 你是一位经验丰富的答案检查专家，擅长分析文本内容，能够快速判断回答是否满足用户的问题需求。你对语言的理解能力极强，能够精准识别回答中的关键信息。
+        - Skills: 你具备文本分析、逻辑判断、语言理解以及快速决策的能力，能够高效地识别回答中的有效性和完整性。
+        - Goals: 判断大模型生成的答案是否能够解答用户的问题，并根据特定关键词（如“无法提供”“无法回答”“抱歉”“无法得知”“不知道”等）判断答案是否无效。
+        - Constrains: 仅根据生成的答案内容进行判断，不考虑问题的具体内容。如果答案中明确包含“无法提供”“无法回答”“抱歉”“无法得知”“不知道”等字眼，则判定为不能回答用户问题。
+        - OutputFormat: 输出“yes”或“no”，表示答案是否能够解答用户问题。
+        - Workflow:
+          1. 接收大模型生成的答案。
+          2. 检查答案中是否包含“无法提供”“无法回答”“抱歉”“无法得知”“不知道”等关键词。
+          3. 根据关键词的出现与否，输出“yes”或“no”。
+        - Examples:
+          - 例子1：用户问题：“巴黎的埃菲尔铁塔有多高？”
+            模型答案：“巴黎的埃菲尔铁塔高度为300米。”
+            判断结果：yes
+          - 例子2：用户问题：“月球的背面有什么？”
+            模型答案：“抱歉，我无法提供月球背面的详细信息。”
+            判断结果：no
+        """
+        user_prompt_template = """
+        用户问题：{}
+        模型答案：{}
+        """
+        query = f"{title}:{question}"
+        text = user_prompt_template.format(query,answer)
+        print("text: ")
+        print(text)
+        try:
+            response = self.client.chat.completions.create(
+                model=self.config['api']['model2_name'],
+                messages=[
+                    {
+                        'role': 'system',
+                        'content': sys_prompt_template
+                    },
+                    {
+                        'role': 'user',
+                        'content': text
+                    }
+                ],
+                stream=False,
+                max_tokens=3  # 限制输出长度，只需要"yes"或"no"
+            )
+            result = response.choices[0].message.content.strip().lower()
+            # 如果提供了topic_id，则记录token使用量
+            if topic_id and hasattr(response, 'usage'):
+                token_tracker.add_usage(
+                    topic_id,
+                    prompt_tokens=response.usage.prompt_tokens if hasattr(response.usage, 'prompt_tokens') else 0,
+                    completion_tokens=response.usage.completion_tokens if hasattr(response.usage,
+                                                                                  'completion_tokens') else 0,
+                    total_tokens=response.usage.total_tokens if hasattr(response.usage, 'total_tokens') else 0
+                )
+            # 确保返回值只能是"yes"或"no"
+            if "yes" in result:
+                return "yes"
+            else:
+                return "no"
+        except Exception as e:
+            logger.error(f"检查答案质量时出错: {e}")
             return "no"  # 出错时默认不相关，避免发布不相关的内容
 
 
