@@ -159,10 +159,13 @@ class ForumClient:
         url = f"{base_url}{endpoint}"
         # 获取SSL验证设置
         verify_ssl = self.config.get('retrieval', {}).get('verify_ssl', True)
+        only_need_prompt = self.config.get('retrieval', {}).get('only_need_prompt', False)
+        only_need_context = self.config.get('retrieval', {}).get('only_need_context', True)
 
         payload = {
             "query": query,
-            "only_need_prompt": self.config['retrieval']['only_need_prompt'],
+            "only_need_prompt": only_need_prompt,
+            "only_need_context": only_need_context,
             "top_k": self.config['retrieval']['top_k'],
             "chunk_top_k": self.config['retrieval']['chunk_top_k'],
             "enable_rerank": self.config['retrieval']['enable_rerank'],

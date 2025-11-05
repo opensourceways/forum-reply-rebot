@@ -6,7 +6,7 @@ import subprocess
 from datetime import datetime
 from .forum_client import ForumClient
 from .ai_processor import AIProcessor
-from .data_processor import DataProcessor
+from .data_processor import DataProcessor, format_search_results_as_json
 from src.utils import load_config
 from .logging_config import main_logger as logger
 from .token_tracker import token_tracker
@@ -235,6 +235,13 @@ class ForumMonitor:
                         # 如果已经收集到足够的链接（总共5个），就停止
                         if len(kg_links) + len(search_links) >= MAX_SEARCH_RESULTS:
                             break
+                elif path.startswith('http'):
+                    # http开头的链接不拼接任何base_url
+                    if path not in search_links:
+                        search_links.append(path)
+                    # 如果已经收集到足够的链接（总共5个），就停止
+                    if len(kg_links) + len(search_links) >= MAX_SEARCH_RESULTS:
+                        break
                 else:
                     full_url = docs_base_url + path
                     if full_url not in search_links:
@@ -264,6 +271,9 @@ class ForumMonitor:
                     continue
                 if path.startswith('/t/topic'):
                     full_url = forum_base_url + path
+                elif path.startswith('http'):
+                    # http开头的链接不拼接任何base_url
+                    full_url = path
                 else:
                     full_url = docs_base_url + path
                 # 避免完全相同的链接重复
@@ -304,7 +314,7 @@ class ForumMonitor:
             try:
                 retrieval_results = []
                 # 检查是否为提示词注入攻击
-                is_injection = self.ai_processor.check_prompt_injection(topic['title'], topic['user_question'])
+                is_injection = self.ai_processor.check_prompt_injection(topic['title'], topic['user_question'], topic_id)
                 if is_injection.lower() == 'yes':
                     logger.info(f"帖子 {topic_id} 被识别为提示词注入攻击，跳过处理")
                     continue
@@ -338,12 +348,13 @@ class ForumMonitor:
                             logger.info(f"帖子 {topic_id} 既没有搜索结果也没有检索结果，跳过回答")
                             continue
 
-                    retrieval_result['related_docs'] = self.data_processor.format_search_results_for_prompt(
+                    retrieval_result['related_docs'], context_data = self.data_processor.format_search_results_for_prompt(
                         retrieval_result, search_results
                     )
                 except Exception as e:
                     logger.error(f"帖子 {topic_id} 检索文档时发生异常: {e}，使用空字符串继续处理")
                     retrieval_result = {'topic_id': topic_id, 'related_docs': ''}
+                    context_data = format_search_results_as_json(search_results)
                     if not search_results:
                         logger.info(f"帖子 {topic_id} 既没有搜索结果也没有检索结果，跳过回答")
                         continue
@@ -367,8 +378,22 @@ class ForumMonitor:
                     answer = "抱歉，暂时无法生成回答。"
 
                 # 检查生成的答案与搜索结果是否相关
-                is_relevant = self.ai_processor.check_answer_relevance(answer, search_results)
+                is_relevant = self.ai_processor.check_answer_relevance(answer, context_data, topic_id)
+                # is_qualified = self.ai_processor.check_answer_quality(answer, topic['title'], topic['user_question'], topic_id)
                 if is_relevant.lower() != 'yes':
+                    topic['llm_answer'] = answer
+                    token_usage = token_tracker.get_usage(topic_id)
+                    # 每处理完1个topic就处理检索结果
+                    self.data_processor.process_retrieval_results(retrieval_results)
+
+                    single_topic_list = [topic]
+
+                    # 将包含AI回答的数据写入CSV文件
+                    self.data_processor.append_to_csv(single_topic_list, processed_csv_file)
+                    self.data_processor.append_to_db(single_topic_list, 'processed_forum_topics')
+
+                    # 将token使用量数据写入consume_tokens_topic表
+                    self.data_processor.save_token_usage_to_db(topic_id, token_usage)
                     logger.info(f"帖子 {topic_id} 的答案与搜索结果不相关，跳过回复")
                     continue
                 # 添加相关链接
