@@ -155,6 +155,9 @@ def fetch_all_forum_topics(config):
             all_topics.extend(filtered_topics)
 
             logger.info(f"已获取第 {page} 页的 {len(filtered_topics)} 个符合条件的帖子。")
+            if len(filtered_topics) < 1:
+                logger.info(f"当前页已获取的帖子数量为0，结束爬取。")
+                break
 
             page += 1
 
