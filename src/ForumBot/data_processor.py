@@ -118,6 +118,7 @@ def fetch_all_forum_topics(config):
             response = requests.get(base_url, params=params, verify=verify_ssl, timeout=30)
             response.raise_for_status()
             data = response.json()
+            time.sleep(request_delay)
 
             topic_list = data.get("topic_list", {})
             topics = topic_list.get("topics", [])
