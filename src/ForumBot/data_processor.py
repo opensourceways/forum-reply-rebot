@@ -97,10 +97,11 @@ def fetch_all_forum_topics(config):
     page = 0
     all_topics = []
 
-    # 获取过滤条件
-    required_tag = config['monitor']['required_tag']
+    # 获取过滤条件 - 支持多个标签
+    required_tags = config['monitor'].get('required_tag', [])
     # 获取SSL验证设置
     verify_ssl = config.get('forum', {}).get('verify_ssl', True)
+    request_delay = config.get('forum', {}).get('request_delay', 0.1)
 
     # 设置过滤日期 (2025年9月1日)
     cutoff_date = datetime.strptime(config['monitor']['topic_cutoff_date'], '%Y-%m-%d')
@@ -113,6 +114,7 @@ def fetch_all_forum_topics(config):
         }
 
         try:
+            time.sleep(request_delay)
             response = requests.get(base_url, params=params, verify=verify_ssl, timeout=30)
             response.raise_for_status()
             data = response.json()
@@ -133,8 +135,15 @@ def fetch_all_forum_topics(config):
                 else:
                     topic_tags_str = str(topic_tags)
 
-                if required_tag not in topic_tags_str:
-                    continue  # 如果不包含所需标签，则跳过
+                # 检查是否有任何一个所需的标签存在于帖子标签中
+                tag_matched = False
+                for required_tag in required_tags:
+                    if required_tag in topic_tags_str:
+                        tag_matched = True
+                        break
+
+                if not tag_matched:
+                    continue  # 如果不包含任何所需标签，则跳过
 
                 # 检查创建时间是否在指定日期之后
                 created_at_str = topic.get('created_at', '')
@@ -155,9 +164,9 @@ def fetch_all_forum_topics(config):
             all_topics.extend(filtered_topics)
 
             logger.info(f"已获取第 {page} 页的 {len(filtered_topics)} 个符合条件的帖子。")
-            if len(filtered_topics) < 1:
-                logger.info(f"当前页已获取的帖子数量为0，结束爬取。")
-                break
+            # if len(filtered_topics) < 1:
+            #     logger.info(f"当前页已获取的帖子数量为0，结束爬取。")
+            #     break
 
             page += 1
 
