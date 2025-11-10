@@ -674,44 +674,58 @@ class DataProcessor:
 
 
     def load_existing_data(self, csv_file=None):
-        # """
-        # 从现有CSV文件中加载已有的帖子数据
-        # """
-        # if csv_file is None:
-        #     csv_file = self.config['paths']['csv_file']
-        #
-        # existing_data = {}
-        # if os.path.exists(csv_file):
-        #     try:
-        #         with open(csv_file, 'r', encoding='utf-8') as file:
-        #             reader = csv.DictReader(file)
-        #             for row in reader:
-        #                 topic_id = int(row['id'])
-        #                 existing_data[topic_id] = row
-        #     except Exception as e:
-        #         logger.error(f"读取现有CSV文件时出错: {e}")
         """
-           从数据库中加载已有的帖子数据
-           """
+                从数据库中加载已有的帖子数据，如果数据库不可用则回退到CSV文件
+                """
         existing_data = {}
 
-        conn = self._get_db_connection()
-        if not conn:
-            logger.error("无法建立数据库连接")
+        # 首先尝试从数据库加载数据
+        try:
+            conn = self._get_db_connection()
+            if not conn:
+                logger.warning("无法建立数据库连接，将尝试从CSV文件加载数据")
+            else:
+                try:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT id FROM forum_topics")
+                    rows = cursor.fetchall()
+                    for row in rows:
+                        existing_data[row[0]] = True  # 只需要ID来检查是否存在
+                    cursor.close()
+                    logger.info(f"从数据库加载了 {len(existing_data)} 个已存在的帖子")
+                except Exception as e:
+                    logger.warning(f"从数据库加载数据时出错: {e}，将尝试从CSV文件加载数据")
+                finally:
+                    self._close_db_connection(conn)
+        except Exception as e:
+            logger.warning(f"数据库连接过程中发生异常: {e}，将尝试从CSV文件加载数据")
+
+        # 如果数据库加载成功且有数据，直接返回
+        if existing_data:
             return existing_data
 
+        # 如果数据库没有数据或连接失败，尝试从CSV文件加载
+        logger.info("数据库中没有数据或连接失败，尝试从CSV文件加载数据")
         try:
-            cursor = conn.cursor()
-            cursor.execute("SELECT id FROM forum_topics")
-            rows = cursor.fetchall()
-            for row in rows:
-                existing_data[row[0]] = True  # 只需要ID来检查是否存在
-            cursor.close()
-            logger.info(f"从数据库加载了 {len(existing_data)} 个已存在的帖子")
+            if csv_file is None:
+                csv_file = self.config['paths']['csv_file']
+
+            if os.path.exists(csv_file):
+                with open(csv_file, 'r', encoding='utf-8') as file:
+                    reader = csv.DictReader(file)
+                    for row in reader:
+                        topic_id = int(row['id'])
+                        existing_data[topic_id] = row
+                logger.info(f"从CSV文件加载了 {len(existing_data)} 个已存在的帖子")
+            else:
+                logger.warning(f"CSV文件 {csv_file} 不存在")
         except Exception as e:
-            logger.error(f"从数据库加载数据时出错: {e}")
-        finally:
-            self._close_db_connection(conn)
+            logger.error(f"从CSV文件加载数据时出错: {e}")
+
+        # 如果两种方式都失败，让服务停止运行
+        if not existing_data:
+            logger.critical("无法从数据库或CSV文件加载数据，服务将停止运行")
+            raise SystemExit("Critical error: 无法加载任何现有数据，程序退出")
 
         return existing_data
 
