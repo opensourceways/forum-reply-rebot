@@ -719,13 +719,13 @@ class DataProcessor:
                 logger.info(f"从CSV文件加载了 {len(existing_data)} 个已存在的帖子")
             else:
                 logger.warning(f"CSV文件 {csv_file} 不存在")
+                logger.critical("无法从数据库或CSV文件加载数据，服务将停止运行")
+                raise SystemExit("Critical error: 无法加载任何现有数据，程序退出")
         except Exception as e:
             logger.error(f"从CSV文件加载数据时出错: {e}")
-
-        # 如果两种方式都失败，让服务停止运行
-        if not existing_data:
             logger.critical("无法从数据库或CSV文件加载数据，服务将停止运行")
             raise SystemExit("Critical error: 无法加载任何现有数据，程序退出")
+
 
         return existing_data
 
